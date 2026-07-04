@@ -1,0 +1,70 @@
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.env
+.venv
+venv/
+ENV/
+env/
+ENV/local/
+ENV/packages/
+
+# Data files (Ignore large raw CSV files to keep git repository lightweight)
+*.csv
+data/raw_files/*.csv
+fnb_15_branches_synthetic_dataset/*.csv
+
+# Logs
+*.log
+pipelines/*.log
+database/*.log
+
+# dbt (Data Build Tool) files
+target/
+dbt_packages/
+dbt_modules/
+logs/
+
+# Jupyter Notebooks checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# IDE configs
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
