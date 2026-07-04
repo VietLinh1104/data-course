@@ -3,13 +3,17 @@ import uuid
 import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Optional
 
 import pandas as pd
-# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
-# pyrefly: ignore [missing-import]
 from sqlalchemy import create_engine, text
+
+from src.logger.logger import setup_logger
+from src.audit.pipeline_runs import (
+  create_pipeline_run_log,
+  update_pipeline_run_log,
+  create_data_quality_errors
+)
 
 
 load_dotenv()
@@ -22,112 +26,31 @@ engine = create_engine(DATABASE_URL)
 CHUNK_SIZE = 1000
 
 CSV_TO_TABLE = {
-    # "branches.csv": "branches",
-    # "campaigns.csv": "campaigns",
-    # "customers.csv": "customers",
-    # "data_dictionary.csv": "data_dictionary",
-    # "employee_shifts.csv": "employee_shifts",
-    # "employees.csv": "employees",
-    # "ingredients.csv": "ingredients",
-    # "inventory_daily.csv": "inventory_daily",
-    # "order_items.csv": "order_items",
-    "orders.csv": "orders",
-    "payments.csv": "payments",
-    "products.csv": "products",
-    "purchase_orders.csv": "purchase_orders",
-    "recipes.csv": "recipes",
-    "suppliers.csv": "suppliers",
+#     "branches.csv": "branches",
+#     "campaigns.csv": "campaigns",
+#     "customers.csv": "customers",
+#     "data_dictionary.csv": "data_dictionary",
+#     "employee_shifts.csv": "employee_shifts",
+#     "employees.csv": "employees",
+#     "ingredients.csv": "ingredients",
+#     "inventory_daily.csv": "inventory_daily",
+#     "order_items.csv": "order_items",
+#     "orders.csv": "orders",
+#     "payments.csv": "payments",
+#     "products.csv": "products",
+#     "purchase_orders.csv": "purchase_orders",
+#     "recipes.csv": "recipes",
+#     "suppliers.csv": "suppliers",
     "vouchers.csv": "vouchers",
 }
 
-
-def setup_logger():
-    log_dir = Path("logs")
-    log_dir.mkdir(exist_ok=True)
-
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-        handlers=[
-            logging.FileHandler(log_dir / "ingest_raw.log", encoding="utf-8"),
-            logging.StreamHandler(),
-        ],
-    )
-
-
-def create_ingestion_log(batch_id: str, csv_name: str, table_name: str, status: str):
-    with engine.begin() as conn:
-        result = conn.execute(
-            text("""
-                INSERT INTO metadata.ingestion_logs (
-                    batch_id,
-                    source_file_name,
-                    target_schema,
-                    target_table,
-                    status,
-                    started_at,
-                    updated_at
-                )
-                VALUES (
-                    :batch_id,
-                    :source_file_name,
-                    'raw',
-                    :target_table,
-                    :status,
-                    NOW(),
-                    NOW()
-                )
-                RETURNING id;
-            """),
-            {
-                "batch_id": batch_id,
-                "source_file_name": csv_name,
-                "target_table": table_name,
-                "status": status,
-            }
-        )
-
-        return result.scalar_one()
-
-def update_ingestion_log(
-    log_id: int,
-    status: str,
-    rows_total: int = 0,
-    rows_inserted: int = 0,
-    error_message: Optional[str] = None,
-    ended: bool = False,
-):
-    ended_sql = "ended_at = NOW()," if ended else ""
-
-    with engine.begin() as conn:
-        conn.execute(
-            text(f"""
-                UPDATE metadata.ingestion_logs
-                SET
-                    status = :status,
-                    rows_total = :rows_total,
-                    rows_inserted = :rows_inserted,
-                    error_message = :error_message,
-                    {ended_sql}
-                    updated_at = NOW()
-                WHERE id = :log_id;
-            """),
-            {
-                "log_id": log_id,
-                "status": status,
-                "rows_total": rows_total,
-                "rows_inserted": rows_inserted,
-                "error_message": error_message,
-            }
-        )
-
-
 def load_csv_to_raw(csv_file: Path, table_name: str, batch_id: str):
-    log_id = create_ingestion_log(
+    run_id = create_pipeline_run_log(
         batch_id=batch_id,
-        csv_name=csv_file.name,
-        table_name=table_name,
+        pipeline_step="INGESTION_RAW",
         status="STARTED",
+        row_count=0,
+        error_message=None,
     )
 
     rows_total = 0
@@ -148,11 +71,10 @@ def load_csv_to_raw(csv_file: Path, table_name: str, batch_id: str):
 
         rows_total = len(df)
 
-        update_ingestion_log(
-            log_id=log_id,
+        update_pipeline_run_log(
+            run_id=run_id,
             status="RUNNING",
-            rows_total=rows_total,
-            rows_inserted=0,
+            row_count=rows_total,
         )
 
         for start in range(0, rows_total, CHUNK_SIZE):
@@ -171,22 +93,20 @@ def load_csv_to_raw(csv_file: Path, table_name: str, batch_id: str):
 
             rows_inserted += len(chunk_df)
 
-            update_ingestion_log(
-                log_id=log_id,
+            update_pipeline_run_log(
+                run_id=run_id,
                 status="RUNNING",
-                rows_total=rows_total,
-                rows_inserted=rows_inserted,
+                row_count=rows_total,
             )
 
             logging.info(
                 f"{csv_file.name}: inserted {rows_inserted}/{rows_total} rows"
             )
 
-        update_ingestion_log(
-            log_id=log_id,
+        update_pipeline_run_log(
+            run_id=run_id,
             status="SUCCESS",
-            rows_total=rows_total,
-            rows_inserted=rows_inserted,
+            row_count=rows_total,
             ended=True,
         )
 
@@ -195,13 +115,21 @@ def load_csv_to_raw(csv_file: Path, table_name: str, batch_id: str):
     except Exception as e:
         error_message = str(e)[:5000]
 
-        update_ingestion_log(
-            log_id=log_id,
+        update_pipeline_run_log(
+            run_id=run_id,
             status="FAILED",
-            rows_total=rows_total,
-            rows_inserted=rows_inserted,
+            row_count=rows_total,
             error_message=error_message,
             ended=True,
+        )
+
+        create_data_quality_errors(
+            batch_id=batch_id,
+            source_table=table_name,
+            row_identifier=rows_inserted,
+            pipeline_step="INGESTION_RAW",
+            error_type="PROCESSING_ERROR",
+            error_detail=error_message,
         )
 
         logging.exception(
@@ -227,18 +155,27 @@ def main():
         if not csv_file.exists():
             skipped_count += 1
 
-            log_id = create_ingestion_log(
+            run_id = create_pipeline_run_log(
                 batch_id=batch_id,
-                csv_name=csv_name,
-                table_name=table_name,
+                pipeline_step="INGESTION_RAW",
                 status="SKIPPED",
+                row_count=0,
+                error_message=f"File not found: {csv_file}",
             )
 
-            update_ingestion_log(
-                log_id=log_id,
+            update_pipeline_run_log(
+                run_id=run_id,
                 status="SKIPPED",
-                error_message=f"File not found: {csv_file}",
                 ended=True,
+            )
+
+            create_data_quality_errors(
+                batch_id=batch_id,
+                source_table=table_name,
+                row_identifier="N/A",
+                pipeline_step="INGESTION_RAW",
+                error_type="MISSING_FILE",
+                error_detail=f"File not found: {csv_file}",
             )
 
             logging.warning(f"Skip: file not found {csv_file}")
@@ -247,9 +184,19 @@ def main():
         try:
             load_csv_to_raw(csv_file, table_name, batch_id)
             success_count += 1
+        except Exception as e:
 
-        except Exception:
+            error_message = str(e)[:5000]
             failed_count += 1
+
+            create_data_quality_errors(
+                batch_id=batch_id,
+                source_table=table_name,
+                row_identifier="N/A",
+                pipeline_step="INGESTION_RAW",
+                error_type="PROCESSING_ERROR",
+                error_detail="Lỗi khi thực hiện load_csv_to_raw: "+ error_message,
+            )
 
             # Không dừng toàn bộ batch.
             # File lỗi sẽ được ghi log, script tiếp tục chạy file sau.

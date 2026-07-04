@@ -10,3 +10,14 @@ CREATE TABLE IF NOT EXISTS audit.pipeline_runs (
     row_count INTEGER DEFAULT 0,
     error_message TEXT
 );
+
+CREATE TABLE IF NOT EXISTS audit.data_quality_errors (
+    error_id BIGSERIAL PRIMARY KEY,
+    batch_id UUID NOT NULL,
+    source_table VARCHAR(50) NOT NULL,
+    row_identifier VARCHAR(100),
+    error_type VARCHAR(50) NOT NULL,
+    error_detail TEXT,
+    detected_at TIMESTAMP DEFAULT NOW(),
+    pipeline_step VARCHAR(50) NOT NULL
+);
