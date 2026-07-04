@@ -1,7 +1,6 @@
 import os
 from dotenv import load_dotenv
 from typing import Optional
-from pathlib import Path
 from sqlalchemy import create_engine, text
 load_dotenv()
 
@@ -9,7 +8,13 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 
 
-def create_pipeline_run_log(batch_id: str, pipeline_step: str, status: str, row_count: int, error_message: str):
+def create_pipeline_run_log(
+    batch_id: str,
+    pipeline_step: str,
+    status: str,
+    row_count: int,
+    error_message: Optional[str],
+):
     with engine.begin() as conn:
         result = conn.execute(
             text("""
@@ -75,7 +80,7 @@ def update_pipeline_run_log(
 def create_data_quality_errors(
     batch_id: str,
     source_table: str,
-    row_identifier: str,
+    row_identifier: Optional[str],
     pipeline_step: str,
     error_type: str,
     error_detail: str,

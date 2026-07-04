@@ -10,9 +10,9 @@ from sqlalchemy import create_engine, text
 
 from src.logger.logger import setup_logger
 from src.audit.pipeline_runs import (
-  create_pipeline_run_log,
-  update_pipeline_run_log,
-  create_data_quality_errors
+    create_data_quality_errors,
+    create_pipeline_run_log,
+    update_pipeline_run_log,
 )
 
 
@@ -26,21 +26,21 @@ engine = create_engine(DATABASE_URL)
 CHUNK_SIZE = 1000
 
 CSV_TO_TABLE = {
-#     "branches.csv": "branches",
-#     "campaigns.csv": "campaigns",
-#     "customers.csv": "customers",
-#     "data_dictionary.csv": "data_dictionary",
-#     "employee_shifts.csv": "employee_shifts",
-#     "employees.csv": "employees",
-#     "ingredients.csv": "ingredients",
-#     "inventory_daily.csv": "inventory_daily",
-#     "order_items.csv": "order_items",
-#     "orders.csv": "orders",
-#     "payments.csv": "payments",
-#     "products.csv": "products",
-#     "purchase_orders.csv": "purchase_orders",
-#     "recipes.csv": "recipes",
-#     "suppliers.csv": "suppliers",
+    "branches.csv": "branches",
+    "campaigns.csv": "campaigns",
+    "customers.csv": "customers",
+    "data_dictionary.csv": "data_dictionary",
+    "employee_shifts.csv": "employee_shifts",
+    "employees.csv": "employees",
+    "ingredients.csv": "ingredients",
+    "inventory_daily.csv": "inventory_daily",
+    "order_items.csv": "order_items",
+    "orders.csv": "orders",
+    "payments.csv": "payments",
+    "products.csv": "products",
+    "purchase_orders.csv": "purchase_orders",
+    "recipes.csv": "recipes",
+    "suppliers.csv": "suppliers",
     "vouchers.csv": "vouchers",
 }
 
@@ -55,14 +55,30 @@ def load_csv_to_raw(csv_file: Path, table_name: str, batch_id: str):
 
     rows_total = 0
     rows_inserted = 0
+    row_identifier = None
 
     try:
         logging.info(f"Loading {csv_file.name} -> raw.{table_name}")
 
         df = pd.read_csv(csv_file, dtype=str)
 
-        # Xử lý cột rác nếu CSV bị thừa
-        df = df.drop(columns=["f"], errors="ignore")
+        # Ghi nhận cột ngoài schema trước khi loại bỏ để ingestion tiếp tục.
+        unexpected_columns = [column for column in ["f"] if column in df.columns]
+        for column in unexpected_columns:
+            non_null_rows = int(df[column].notna().sum())
+            create_data_quality_errors(
+                batch_id=batch_id,
+                source_table=table_name,
+                row_identifier=None,
+                pipeline_step="INGESTION_RAW",
+                error_type="UNEXPECTED_COLUMN",
+                error_detail=(
+                    f"Removed unexpected column '{column}' from {csv_file.name}; "
+                    f"non_null_rows={non_null_rows}"
+                ),
+            )
+
+        df = df.drop(columns=unexpected_columns)
 
         # Thêm metadata bắt buộc cho raw layer
         df["batch_id"] = batch_id
@@ -80,6 +96,9 @@ def load_csv_to_raw(csv_file: Path, table_name: str, batch_id: str):
         for start in range(0, rows_total, CHUNK_SIZE):
             end = start + CHUNK_SIZE
             chunk_df = df.iloc[start:end]
+            row_identifier = (
+                f"csv_rows={start + 2}-{min(end, rows_total) + 1}"
+            )
 
             with engine.begin() as conn:
                 chunk_df.to_sql(
@@ -118,7 +137,7 @@ def load_csv_to_raw(csv_file: Path, table_name: str, batch_id: str):
         update_pipeline_run_log(
             run_id=run_id,
             status="FAILED",
-            row_count=rows_total,
+            row_count=rows_inserted,
             error_message=error_message,
             ended=True,
         )
@@ -126,7 +145,7 @@ def load_csv_to_raw(csv_file: Path, table_name: str, batch_id: str):
         create_data_quality_errors(
             batch_id=batch_id,
             source_table=table_name,
-            row_identifier=rows_inserted,
+            row_identifier=row_identifier,
             pipeline_step="INGESTION_RAW",
             error_type="PROCESSING_ERROR",
             error_detail=error_message,
@@ -169,34 +188,14 @@ def main():
                 ended=True,
             )
 
-            create_data_quality_errors(
-                batch_id=batch_id,
-                source_table=table_name,
-                row_identifier="N/A",
-                pipeline_step="INGESTION_RAW",
-                error_type="MISSING_FILE",
-                error_detail=f"File not found: {csv_file}",
-            )
-
             logging.warning(f"Skip: file not found {csv_file}")
             continue
 
         try:
             load_csv_to_raw(csv_file, table_name, batch_id)
             success_count += 1
-        except Exception as e:
-
-            error_message = str(e)[:5000]
+        except Exception:
             failed_count += 1
-
-            create_data_quality_errors(
-                batch_id=batch_id,
-                source_table=table_name,
-                row_identifier="N/A",
-                pipeline_step="INGESTION_RAW",
-                error_type="PROCESSING_ERROR",
-                error_detail="Lỗi khi thực hiện load_csv_to_raw: "+ error_message,
-            )
 
             # Không dừng toàn bộ batch.
             # File lỗi sẽ được ghi log, script tiếp tục chạy file sau.
