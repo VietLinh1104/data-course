@@ -7,10 +7,10 @@
 | 1 | Xác định mục tiêu hệ thống | ⬜ | |
 | 2 | Chuẩn bị dữ liệu nguồn (16 CSV) | ⬜ | |
 | 3 | Tạo database & schema (raw/staging/warehouse/mart/audit) | ⬜ | |
-| 4 | Data Ingestion (EL) | ⬜ | |
-| 5 | Raw Layer (Bronze) | ⬜ | |
-| 6 | Data Quality Check | ⬜ | |
-| 7 | Transform Raw → Staging | ⬜ | |
+| 4 | Data Ingestion (EL) | ✅ Hoàn thành | 16/16 nguồn đã ingestion thành công, có metadata và audit log. |
+| 5 | Raw Layer (Bronze) | ✅ Hoàn thành | Đã xác nhận raw giữ dữ liệu thô và đủ metadata. |
+| 6 | Data Quality Check | ✅ Hoàn thành | DQ Gate theo batch đã PASSED; còn cảnh báo tồn kho cần theo dõi. |
+| 7 | Transform Raw → Staging | ✅ Hoàn thành | 16 bảng typed, DQ gate, idempotent load và đối chiếu row count. |
 | 8 | Thiết kế Data Warehouse (Star Schema) | ⬜ | |
 | 9 | Xác định Grain cho Fact Table | ⬜ | |
 | 10 | Tạo Data Mart (Gold) | ⬜ | |
@@ -33,7 +33,8 @@
 
 | Ngày | Bước đang làm | Việc đã làm | Việc cần làm tiếp theo |
 |---|---|---|---|
-| | | | |
+| 2026-07-05 | Bước 6 | Hoàn thiện DQ Gate gồm key, validity, FK, business rule và reconciliation. | Xử lý cảnh báo tồn kho rồi bắt đầu Raw → Staging. |
+| 2026-07-05 | Bước 7 | Nạp 724.424 dòng vào 16 bảng staging; chuẩn hóa kiểu/text và kiểm thử chạy lại. | Thiết kế Star Schema và xác định grain Fact. |
 
 ---
 
@@ -43,4 +44,6 @@
 
 - [ ] Ví dụ: `purchase_orders` grain chưa xác nhận rõ (1 đơn hay 1 dòng nguyên liệu?)
 - [ ] Ví dụ: `dim_product` chưa áp dụng SCD Type 2 cho lịch sử giá
+- [ ] `order_items.csv` không có `order_item_id`; `(order_id, product_id)` không duy nhất nên chưa thể định danh tuyệt đối từng dòng nguồn.
+- [ ] Điều tra cảnh báo `STOCK_USAGE_EXCEEDS_AVAILABLE` trước khi thiết kế logic tồn kho ở Staging.
 - [ ] ...

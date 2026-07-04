@@ -1,4 +1,4 @@
--- Tạo schema audit nếu chưa có, tạo bảng pipeline_runs với cột như đã gợi ý ở lượt trước (run_id, batch_id, pipeline_step, started_at, finished_at, status, row_count, error_message).
+CREATE SCHEMA IF NOT EXISTS audit;
 
 CREATE TABLE IF NOT EXISTS audit.pipeline_runs (
     run_id BIGSERIAL PRIMARY KEY,
@@ -17,7 +17,11 @@ CREATE TABLE IF NOT EXISTS audit.data_quality_errors (
     source_table VARCHAR(50) NOT NULL,
     row_identifier VARCHAR(100),
     error_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(10) NOT NULL DEFAULT 'ERROR',
     error_detail TEXT,
     detected_at TIMESTAMP DEFAULT NOW(),
     pipeline_step VARCHAR(50) NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_dq_errors_batch_step
+    ON audit.data_quality_errors (batch_id, pipeline_step);

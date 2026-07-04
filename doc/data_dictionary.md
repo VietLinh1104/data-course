@@ -49,12 +49,14 @@
 ### 4. `order_items.csv`
 | Cột | Kiểu gợi ý | PK/FK | Ghi chú |
 |---|---|---|---|
-| order_item_id | VARCHAR | PK | **Grain: 1 dòng = 1 món trong hóa đơn** |
-| order_id | VARCHAR | FK → orders | ⚠️ không JOIN trực tiếp lên `orders` rồi SUM → gây fan-out |
+| order_id | VARCHAR | FK → orders | **Grain: 1 dòng nguồn = 1 món trong hóa đơn**; ⚠️ không JOIN trực tiếp lên `orders` rồi SUM → gây fan-out |
 | product_id | INT | FK → products | |
 | quantity | INT | | > 0 |
 | unit_price | NUMERIC | | giá tại thời điểm bán (có thể khác `products.price` do khuyến mãi) |
 | line_total | NUMERIC | | = quantity × unit_price (kiểm tra khớp) |
+
+> File nguồn hiện không có `order_item_id` và `(order_id, product_id)` không duy nhất.
+> Cần bổ sung `source_row_number` khi ingestion hoặc sinh khóa kỹ thuật ở Staging.
 
 ### 5. `payments.csv`
 | Cột | Kiểu gợi ý | PK/FK | Ghi chú |
@@ -115,7 +117,7 @@
 | received_qty | NUMERIC | | |
 | used_qty | NUMERIC | | |
 | waste_qty | NUMERIC | | dùng tính waste rate = waste_qty / (beginning + received) |
-| ending_stock | NUMERIC | | ⚠️ kiểm tra công thức cân bằng: ending = beginning + received - used - waste |
+| ending_stock | NUMERIC | | Công thức nguồn: `GREATEST(0, beginning + received - used - waste)` |
 
 ---
 
