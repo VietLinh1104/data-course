@@ -1,20 +1,17 @@
-import os
-from dotenv import load_dotenv
 from typing import Optional
-from sqlalchemy import create_engine, text
-load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-engine = create_engine(DATABASE_URL)
+from sqlalchemy import text
+from sqlalchemy.engine import Engine
 
 
 def create_pipeline_run_log(
+    engine: Engine,
     batch_id: str,
     pipeline_step: str,
     status: str,
     row_count: int,
     error_message: Optional[str],
-):
+) -> int:
     with engine.begin() as conn:
         result = conn.execute(
             text("""
@@ -41,19 +38,21 @@ def create_pipeline_run_log(
                 "pipeline_step": pipeline_step,
                 "status": status,
                 "row_count": row_count,
-                "error_message": error_message
-            }
+                "error_message": error_message,
+            },
         )
 
         return result.scalar_one()
 
+
 def update_pipeline_run_log(
+    engine: Engine,
     run_id: int,
     status: str,
     row_count: int = 0,
     error_message: Optional[str] = None,
     ended: bool = False,
-):
+) -> None:
     with engine.begin() as conn:
         ended_sql = "finished_at = NOW()," if ended else ""
 
@@ -72,19 +71,19 @@ def update_pipeline_run_log(
                 "status": status,
                 "row_count": row_count,
                 "error_message": error_message,
-            }
+            },
         )
 
 
-
 def create_data_quality_errors(
+    engine: Engine,
     batch_id: str,
     source_table: str,
     row_identifier: Optional[str],
     pipeline_step: str,
     error_type: str,
     error_detail: str,
-):
+) -> int:
     with engine.begin() as conn:
         result = conn.execute(
             text("""
@@ -115,7 +114,7 @@ def create_data_quality_errors(
                 "pipeline_step": pipeline_step,
                 "error_type": error_type,
                 "error_detail": error_detail,
-            }
+            },
         )
 
         return result.scalar_one()

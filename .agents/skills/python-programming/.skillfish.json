@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "name": "python-programming",
+  "owner": "pluginagentmarketplace",
+  "repo": "custom-plugin-data-engineer",
+  "path": "skills/python-programming",
+  "branch": "main",
+  "sha": "a56d0e396763ef159a72eb9a86d543f034ab1ce2",
+  "source": "manual"
+}
